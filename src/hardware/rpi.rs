@@ -643,3 +643,4 @@ impl Tool for RpiSystemInfoTool {
         })
     }
 }
+
