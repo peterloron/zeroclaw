@@ -193,6 +193,11 @@ pdf-extract = { version = "0.10", optional = true }
 # Terminal QR rendering for WhatsApp Web pairing flow.
 qrcode = { version = "0.14", optional = true }
 
+# TUI (Terminal User Interface)
+ratatui = { version = "0.30", optional = true, default-features = false, features = ["crossterm"] }
+crossterm = { version = "0.29", optional = true }
+tui-textarea = { version = "0.7", optional = true }
+
 # WhatsApp Web client (wa-rs) — optional, enable with --features whatsapp-web
 # Uses wa-rs for Bot and Client, wa-rs-core for storage traits, custom rusqlite backend avoids Diesel conflict.
 wa-rs = { version = "0.2", optional = true, default-features = false }
@@ -239,6 +244,8 @@ probe = ["dep:probe-rs"]
 rag-pdf = ["dep:pdf-extract"]
 # whatsapp-web = Native WhatsApp Web client with custom rusqlite storage backend
 whatsapp-web = ["dep:wa-rs", "dep:wa-rs-core", "dep:wa-rs-binary", "dep:wa-rs-proto", "dep:wa-rs-ureq-http", "dep:wa-rs-tokio-transport", "dep:serde-big-array", "dep:prost", "dep:qrcode"]
+# TUI (Terminal User Interface)
+tui = ["dep:ratatui", "dep:crossterm", "dep:tui-textarea"]
 
 [profile.release]
 opt-level = "z"      # Optimize for size

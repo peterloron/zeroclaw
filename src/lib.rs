@@ -73,6 +73,9 @@ pub mod tools;
 pub(crate) mod tunnel;
 pub(crate) mod util;
 
+#[cfg(feature = "tui")]
+pub mod tui;
+
 pub use config::Config;
 
 /// Gateway management subcommands

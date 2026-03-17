@@ -528,6 +528,17 @@ Examples:
         #[arg(value_enum)]
         shell: CompletionShell,
     },
+
+    /// Launch the Terminal User Interface
+    #[cfg(feature = "tui")]
+    Tui {
+        /// Gateway URL to connect to (default: http://127.0.0.1:<gateway_port>)
+        #[arg(long)]
+        gateway_url: Option<String>,
+        /// Bearer token for authentication
+        #[arg(long)]
+        token: Option<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1325,6 +1336,17 @@ async fn main() -> Result<()> {
                 Ok(())
             }
         },
+
+        #[cfg(feature = "tui")]
+        Commands::Tui {
+            gateway_url,
+            token,
+        } => {
+            let url = gateway_url
+                .unwrap_or_else(|| format!("http://127.0.0.1:{}", config.gateway.port));
+            let mut app = zeroclaw::tui::TuiApp::new(url, token);
+            app.run().await
+        }
     }
 }
 
