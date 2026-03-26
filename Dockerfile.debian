@@ -23,10 +23,21 @@ RUN npm run build
 # Or with docker compose:
 #   docker compose -f docker-compose.yml -f docker-compose.debian.yml up
 
-# ── Stage 1: Build (match runtime glibc baseline) ───────────
-FROM rust:1.94-bookworm AS builder
-
+# ── Stage 1a: Install cargo-chef ──────────────────────────────
+FROM rust:1.94-bookworm AS chef
+RUN cargo install cargo-chef --locked
 WORKDIR /app
+
+# ── Stage 1b: Prepare dependency recipe ───────────────────────
+FROM chef AS planner
+COPY . .
+# apps/tauri is a desktop-only GUI; excluded from Docker via .dockerignore
+RUN sed -i 's/, "apps\/tauri"//' Cargo.toml
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ── Stage 1c: Build (match runtime glibc baseline) ───────────
+FROM chef AS builder
+
 ARG ZEROCLAW_CARGO_FEATURES="channel-lark,whatsapp-web"
 
 # Install build dependencies
@@ -36,39 +47,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# 1. Copy manifests to cache dependencies
-COPY Cargo.toml Cargo.lock ./
-# Include every workspace member: Cargo.lock is generated for the full workspace.
-# Previously we used sed to drop `crates/robot-kit`, which made the manifest disagree
-# with the lockfile and caused `cargo --locked` to fail (Cargo refused to rewrite the lock).
-COPY crates/robot-kit/ crates/robot-kit/
-# Create dummy targets declared in Cargo.toml so manifest parsing succeeds.
-RUN mkdir -p src benches \
-    && echo "fn main() {}" > src/main.rs \
-    && echo "" > src/lib.rs \
-    && echo "fn main() {}" > benches/agent_benchmarks.rs
+# Cook dependencies (cached until Cargo.toml/Cargo.lock change)
+COPY --from=planner /app/recipe.json recipe.json
 RUN --mount=type=cache,id=zeroclaw-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=zeroclaw-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=zeroclaw-target,target=/app/target,sharing=locked \
-    if [ -n "$ZEROCLAW_CARGO_FEATURES" ]; then \
-      cargo build --release --locked --features "$ZEROCLAW_CARGO_FEATURES"; \
-    else \
-      cargo build --release --locked; \
-    fi
-RUN rm -rf src benches
+    cargo chef cook --release --recipe-path recipe.json
 
-# 2. Copy only build-relevant source paths (avoid cache-busting on docs/tests/scripts)
-COPY src/ src/
-COPY benches/ benches/
+# Build the application
+COPY . .
+RUN sed -i 's/, "apps\/tauri"//' Cargo.toml
 COPY --from=web-builder /web/dist web/dist
-RUN touch src/main.rs
 RUN --mount=type=cache,id=zeroclaw-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=zeroclaw-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=zeroclaw-target,target=/app/target,sharing=locked \
     if [ -n "$ZEROCLAW_CARGO_FEATURES" ]; then \
-      cargo build --release --locked --features "$ZEROCLAW_CARGO_FEATURES"; \
+      cargo build --release --features "$ZEROCLAW_CARGO_FEATURES"; \
     else \
-      cargo build --release --locked; \
+      cargo build --release; \
     fi && \
     cp target/release/zeroclaw /app/zeroclaw && \
     strip /app/zeroclaw
